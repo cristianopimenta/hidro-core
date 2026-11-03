@@ -1,0 +1,6 @@
+@HidroCore.Api_HostAddress = http://localhost:0
+
+GET {{HidroCore.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

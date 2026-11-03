@@ -1,0 +1,138 @@
+{
+  "realm": "hidro-homologacao",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 30,
+  "clients": [
+    {
+      "clientId": "hidrocore-api",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "hidrocore-homologacao-cli",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "hidrocore-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hidrocore-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "hidrocore-sem-audience-cli",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "username": "onca.teste",
+      "enabled": true,
+      "email": "onca.teste@example.test",
+      "emailVerified": true,
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-4111-8111-111111111111"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Onca-Test-Only-2026",
+          "temporary": false
+        }
+      ],
+      "firstName": "Onca",
+      "lastName": "Homologacao"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "username": "santa.teste",
+      "enabled": true,
+      "email": "santa.teste@example.test",
+      "emailVerified": true,
+      "attributes": {
+        "tenant_id": [
+          "22222222-2222-4222-8222-222222222222"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Santa-Test-Only-2026",
+          "temporary": false
+        }
+      ],
+      "firstName": "Santa",
+      "lastName": "Homologacao"
+    },
+    {
+      "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "username": "onca.operador",
+      "enabled": true,
+      "email": "onca.operador@example.test",
+      "emailVerified": true,
+      "firstName": "Onca",
+      "lastName": "Operador",
+      "attributes": {
+        "tenant_id": [
+          "11111111-1111-4111-8111-111111111111"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Operador-Test-Only-2026",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

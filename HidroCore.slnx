@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HidroCore.Api/HidroCore.Api.csproj" />
+    <Project Path="src/HidroCore.Application/HidroCore.Application.csproj" />
+    <Project Path="src/HidroCore.Domain/HidroCore.Domain.csproj" />
+    <Project Path="src/HidroCore.Infrastructure/HidroCore.Infrastructure.csproj" />
+    <Project Path="src/HidroCore.Integrations/HidroCore.Integrations.csproj" />
+    <Project Path="src/HidroCore.Web/HidroCore.Web.csproj" />
+    <Project Path="src/HidroCore.Worker/HidroCore.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HidroCore.Homologacao/HidroCore.Homologacao.csproj" />
+    <Project Path="tests/HidroCore.Tests/HidroCore.Tests.csproj" />
+  </Folder>
+</Solution>

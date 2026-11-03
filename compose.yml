@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hidrocore}
+      POSTGRES_USER: ${POSTGRES_USER:-hidrocore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.Api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__Mode: ${DATABASE_MODE:-Shared}
+      ConnectionStrings__HidroCoreDedicated: ${DEDICATED_DATABASE_URL:-Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}}
+      ConnectionStrings__HidroCore: Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.Web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__Mode: ${DATABASE_MODE:-Shared}
+      ConnectionStrings__HidroCoreDedicated: ${DEDICATED_DATABASE_URL:-Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}}
+      ConnectionStrings__HidroCore: Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}
+    ports:
+      - "${WEB_PORT:-8081}:8080"
+    depends_on:
+      - api
+    networks: [backend]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Database__Mode: ${DATABASE_MODE:-Shared}
+      ConnectionStrings__HidroCoreDedicated: ${DEDICATED_DATABASE_URL:-Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}}
+      ConnectionStrings__HidroCore: Host=postgres;Port=5432;Database=${POSTGRES_DB:-hidrocore};Username=${POSTGRES_USER:-hidrocore};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+volumes:
+  postgres_data:
+networks:
+  backend:
+    driver: bridge

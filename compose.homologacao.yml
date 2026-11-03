@@ -1,0 +1,125 @@
+name: ${COMPOSE_PROJECT_NAME:-hidrocore-homologacao-20261102}
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: hidrocore_homologacao
+      POSTGRES_USER: hidrocore_hml
+      POSTGRES_PASSWORD: ${HML_POSTGRES_PASSWORD:?Use .env.homologacao}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [isolated]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${HML_KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${HML_KEYCLOAK_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_STRICT: "true"
+    volumes:
+      - keycloakdata:/opt/keycloak/data
+      - ./tests/homologacao/keycloak/hidro-homologacao-realm.json:/opt/keycloak/data/import/hidro-homologacao-realm.json:ro
+    ports:
+      - "127.0.0.1:${HML_KEYCLOAK_PORT:-18080}:8080"
+    networks: [isolated, local-access]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.Api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Database__Mode: Shared
+      ConnectionStrings__HidroCore: "Host=postgres;Port=5432;Database=hidrocore_homologacao;Username=hidrocore_hml;Password=${HML_POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      Authentication__Authority: http://keycloak:8080/realms/hidro-homologacao
+      Authentication__Audience: hidrocore-api
+    ports:
+      - "127.0.0.1:${HML_API_PORT:-18090}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks: [isolated, local-access]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.Web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Database__Mode: Shared
+      ConnectionStrings__HidroCore: "Host=postgres;Port=5432;Database=hidrocore_homologacao;Username=hidrocore_hml;Password=${HML_POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+    ports:
+      - "127.0.0.1:${HML_WEB_PORT:-18091}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [isolated, local-access]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Database__Mode: Shared
+      ConnectionStrings__HidroCore: "Host=postgres;Port=5432;Database=hidrocore_homologacao;Username=hidrocore_hml;Password=${HML_POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      Worker__PollSeconds: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [isolated]
+
+  migration:
+    image: postgres:17-alpine
+    profiles: [tools]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: hidrocore_homologacao
+      PGUSER: hidrocore_hml
+      PGPASSWORD: ${HML_POSTGRES_PASSWORD}
+    volumes:
+      - ./src/HidroCore.Infrastructure/Migrations/0001_initial_multitenant.sql:/migration/0001_initial_multitenant.sql:ro
+      - ./tests/homologacao/seed.sql:/migration/seed.sql:ro
+    command: ["sh", "-ec", "psql -v ON_ERROR_STOP=1 -f /migration/0001_initial_multitenant.sql && psql -v ON_ERROR_STOP=1 -f /migration/seed.sql"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [isolated]
+
+  functional:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    profiles: [tools]
+    environment:
+      HIDROCORE_HOMOLOGACAO_CONNECTION: "Host=postgres;Port=5432;Database=hidrocore_homologacao;Username=hidrocore_hml;Password=${HML_POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+    volumes:
+      - ./tests/HidroCore.Homologacao/bin/Debug/net10.0:/harness:ro
+    command: ["dotnet", "/harness/HidroCore.Homologacao.dll"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [isolated]
+
+volumes:
+  pgdata:
+  keycloakdata:
+networks:
+  isolated:
+    name: ${COMPOSE_PROJECT_NAME:-hidrocore-homologacao-20261102}_isolated
+    internal: true
+  local-access:
+    name: ${COMPOSE_PROJECT_NAME:-hidrocore-homologacao-20261102}_local-access
+    driver: bridge

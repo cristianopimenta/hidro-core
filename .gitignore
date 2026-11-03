@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.env
+*.user
+*.suo
+.env.homologacao
+__pycache__/
