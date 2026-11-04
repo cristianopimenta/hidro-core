@@ -1,0 +1,154 @@
+name: ${COMPOSE_PROJECT_NAME:?Defina COMPOSE_PROJECT_NAME para esta usina}
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_IMAGE_TAG:-17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Defina POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Defina POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER:?Defina APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD}
+      KEYCLOAK_DB: ${KEYCLOAK_DB:?Defina KEYCLOAK_DB}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:?Defina KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Defina KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/01-create-keycloak-db.sh:/docker-entrypoint-initdb.d/01-create-keycloak-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_IMAGE_TAG:-26.2.5}
+    command: ["start", "--http-enabled=true", "--http-relative-path=/auth"]
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?Defina KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Defina KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB:?Defina KEYCLOAK_DB}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?Defina KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Defina KEYCLOAK_DB_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: https://${PUBLIC_DOMAIN}/auth
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: xforwarded
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9000' && bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.Api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Database__Mode: Dedicated
+      ConnectionStrings__HidroCoreDedicated: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER};Password=${APP_DB_PASSWORD}
+      Authentication__Authority: https://${PUBLIC_DOMAIN}/auth/realms/${KEYCLOAK_REALM}
+      Authentication__Audience: ${API_AUDIENCE:-hidrocore-api}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [backend]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.Web
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Database__Mode: Dedicated
+      ConnectionStrings__HidroCoreDedicated: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER};Password=${APP_DB_PASSWORD}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [backend]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.Worker
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      Database__Mode: Dedicated
+      ConnectionStrings__HidroCoreDedicated: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${APP_DB_USER};Password=${APP_DB_PASSWORD}
+      Worker__ExternalDispatchEnabled: "false"
+      Worker__PollSeconds: ${WORKER_POLL_SECONDS:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [backend]
+
+  nginx:
+    image: nginx:${NGINX_IMAGE_TAG:-1.27-alpine}
+    restart: unless-stopped
+    ports:
+      - "${HTTP_BIND_ADDRESS:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${HTTPS_BIND_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_CERTIFICATE_DIR:?Defina TLS_CERTIFICATE_DIR}:/etc/nginx/certs:ro
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Defina PUBLIC_DOMAIN}
+      TLS_CERTIFICATE_FILE: ${TLS_CERTIFICATE_FILE:-fullchain.pem}
+      TLS_PRIVATE_KEY_FILE: ${TLS_PRIVATE_KEY_FILE:-privkey.pem}
+      NGINX_ENVSUBST_FILTER: ^(PUBLIC_DOMAIN|TLS_CERTIFICATE_FILE|TLS_PRIVATE_KEY_FILE)$
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [backend]
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    internal: true

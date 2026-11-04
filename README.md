@@ -31,6 +31,10 @@ docker compose -f compose.yml up --build
 
 Endpoints: API `http://localhost:8080`, painel `http://localhost:8081`, health `/health`. Um domínio tenant deve estar provisionado para acessar rotas; domínios desconhecidos retornam 404.
 
+## Implantação independente por usina
+
+O Compose de produção por instalação está em [`compose.producao.yml`](compose.producao.yml), com proxy Nginx e parâmetros por usina descritos em [`docs/implantacao-independente.md`](docs/implantacao-independente.md). Cada usina deve usar `COMPOSE_PROJECT_NAME`, domínio, credenciais e volumes próprios. O Compose de homologação permanece separado.
+
 ## Integrações e Worker
 
 `IntegracaoUsina` suporta vários módulos por usina e agenda configurável. O Worker percorre tenants isoladamente e só registra rotinas elegíveis. Coleta e transmissão externas permanecem desativadas: não há chamadas reais, inclusive para ANA/CCEE. CCEE depende de documentação oficial; nenhum endpoint, payload ou protocolo foi presumido.

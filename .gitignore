@@ -6,4 +6,5 @@
 *.user
 *.suo
 .env.homologacao
+deploy/usinas/*/.env
 __pycache__/
